@@ -1,0 +1,1012 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "bb019560483f21c56fdc72eb9dd74ff1",
+     "grade": false,
+     "grade_id": "cell-ec90d4c54348e5ec",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [],
+   "source": [
+    "version = \"v2.2.033020\""
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "076499a00c3a23c8edb1b2b9ba5b3420",
+     "grade": false,
+     "grade_id": "cell-28672608ddd36d9f",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "# Assignment 2: Mining Itemsets (Part I)\n",
+    "\n",
+    "\n",
+    "Starting from this week, you will get your hands wet by playing with real-world data with your freshly learned data mining techniques.  To test your understanding of the concepts, you will be asked to implement some of these techniques by your own, for which you can only call from a restricted set of APIs.  In your own projects, of course, you are encouraged to use as many packages and APIs as you may. \n",
+    "\n",
+    "For this assignment, we sampled 10 thousand Tweets with two or more food/drink emojis (yes, those colorful tasty ideograms). You will represent this dataset as a collection of itemsets and practice what we learned in class -- mining and evaluating frequent itemsets, and calculating the similarity of itemsets. \n",
+    "\n",
+    "**Disclaimer**: The data are collected from the real world. As you step into the *wild*, things might not always be nice and clean. Although we, the instructing team, have tried our best effort to filter out Tweets containing poisonous vocabularies and links. It is still possible that you will encouter offensive contents. \n",
+    "\n",
+    "In this assignment, you will:\n",
+    "\n",
+    "- Represent the dataset as a collection of itemsets and mine frequent patterns from it.\n",
+    "- Get familiar with a set of metrics for measuring the importance of patterns (support, frequency, lift, chi-square, mutual information).\n",
+    "- Calculate Jaccard similarity and find the top $k$ similar itemsets to a given itemset.\n",
+    "- Understand Apriori and implement a part of the algorithm.\n",
+    "\n",
+    "Have fun and cheers!🍻"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "3a9ee033c8b6f6b9e9b5350a003821e3",
+     "grade": false,
+     "grade_id": "cell-fdd109a29f2f502e",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "Now Part I begins. We will represent the dataset as a collection of itemsets and conduct some descriptive analysis. The purpose is to get you familiar with the data. You do not need to change any of the code blocks, but just execute all of them and examine the output. Please read through the text descriptions and the code blocks carefully. After you are done, feel free to further explore the dataset in your own ways. \n",
+    "\n",
+    "First, let's import the packages and dependencies that will be used later."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "4088cb1a28f23735a414d021c3bccf2f",
+     "grade": false,
+     "grade_id": "cell-91f7b56bbe3e6ac5",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "from sklearn.preprocessing import MultiLabelBinarizer\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "b6d4872a3a710d892ba46622047b242e",
+     "grade": false,
+     "grade_id": "cell-f28f3207bfce92e1",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "## 1. Data Preprocessing\n",
+    "\n",
+    "Let's start by loading the dataset and preview its first few lines"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "1643670d217c59f34cbd8aa28130a761",
+     "grade": false,
+     "grade_id": "cell-66774247573ee741",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>text</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>RT @CalorieFixess: 🍗🌯🍔🍒 400 Calories https://t...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>RT @1_F_I_R_S_T: _ 🍈¹〉Grow your account fast! ...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>RT @LegendDeols: 👉👉👉G€T Ready to dance💃🕺🕺🕺💃💃💃 ...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>@britch_x Hubby's friend bought us Wendy's-che...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>RT @DAILYPUPPlES: Workout partner ☕🍌😍 https://...</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                                text\n",
+       "0  RT @CalorieFixess: 🍗🌯🍔🍒 400 Calories https://t...\n",
+       "1  RT @1_F_I_R_S_T: _ 🍈¹〉Grow your account fast! ...\n",
+       "2  RT @LegendDeols: 👉👉👉G€T Ready to dance💃🕺🕺🕺💃💃💃 ...\n",
+       "3  @britch_x Hubby's friend bought us Wendy's-che...\n",
+       "4  RT @DAILYPUPPlES: Workout partner ☕🍌😍 https://..."
+      ]
+     },
+     "execution_count": 3,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "tweets_df = pd.read_csv(\"assets/food_drink_emoji_tweets.txt\", sep=\"\\t\", header=None)\n",
+    "tweets_df.columns = ['text']\n",
+    "tweets_df.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "(9958, 1)"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "tweets_df.shape"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "7053936990a7da2f990ba84e9540091e",
+     "grade": false,
+     "grade_id": "cell-7f0670208db979d0",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "You should find that every line of the data is a Tweet. Now let's extract the emojis that appear in each Tweet as an itemset. For this assignment, we are only interested in emojis that are food and drink."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "07e22de251e38e4a12a0ea85890146d3",
+     "grade": false,
+     "grade_id": "cell-9fc51ead6dddf474",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [],
+   "source": [
+    "emoji_by_category = {\n",
+    "    \"food_fruit\": \"🍇🍈🍉🍊🍋🍌🍍🥭🍎🍏🍐🍑🍒🍓🥝🍅🥥\",\n",
+    "    \"food_vegetable\": \"🥑🍆🥔🥕🌽🌶🥒🥬🥦🍄🥜🌰\",\n",
+    "    \"food_prepared\": \"🍞🥐🥖🥨🥯🥞🧀🍖🍗🥩🥓🍔🍟🍕🌭🥪🌮🌯🥙🥚🍳🥘🍲🥣🥗🍿🧂🥫\",\n",
+    "    \"food_asian\": \"🍱🍘🍙🍚🍛🍜🍝🍠🍢🍣🍤🍥🥮🍡🥟🥠🥡\",\n",
+    "    \"food_marian\": \"🦀🦞🦐🦑\",\n",
+    "    \"food_sweet\": \"🍦🍧🍨🍩🍪🎂🍰🧁🥧🍫🍬🍭🍮🍯\",\n",
+    "    \"drink\": \"🍼🥛☕🍵🍶🍾🍷🍸🍹🍺🍻🥂🥃\"\n",
+    "}\n",
+    "\n",
+    "emoji_set = set()\n",
+    "for emoji_list in emoji_by_category.values():\n",
+    "    emoji_set.update(emoji_list)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "e2ec6459ea91b2d7289307199fedb6d2",
+     "grade": false,
+     "grade_id": "cell-f142322e8a5ec759",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>text</th>\n",
+       "      <th>emojis</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>RT @CalorieFixess: 🍗🌯🍔🍒 400 Calories https://t...</td>\n",
+       "      <td>[🌯, 🍒, 🍔, 🍗]</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>RT @1_F_I_R_S_T: _ 🍈¹〉Grow your account fast! ...</td>\n",
+       "      <td>[🍇, 🍈, 🍉, 🍊, 🍍, 🍓]</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>RT @LegendDeols: 👉👉👉G€T Ready to dance💃🕺🕺🕺💃💃💃 ...</td>\n",
+       "      <td>[🍸, 🥃]</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>@britch_x Hubby's friend bought us Wendy's-che...</td>\n",
+       "      <td>[🍔, 🍟]</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>RT @DAILYPUPPlES: Workout partner ☕🍌😍 https://...</td>\n",
+       "      <td>[☕, 🍌]</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                                text              emojis\n",
+       "0  RT @CalorieFixess: 🍗🌯🍔🍒 400 Calories https://t...        [🌯, 🍒, 🍔, 🍗]\n",
+       "1  RT @1_F_I_R_S_T: _ 🍈¹〉Grow your account fast! ...  [🍇, 🍈, 🍉, 🍊, 🍍, 🍓]\n",
+       "2  RT @LegendDeols: 👉👉👉G€T Ready to dance💃🕺🕺🕺💃💃💃 ...              [🍸, 🥃]\n",
+       "3  @britch_x Hubby's friend bought us Wendy's-che...              [🍔, 🍟]\n",
+       "4  RT @DAILYPUPPlES: Workout partner ☕🍌😍 https://...              [☕, 🍌]"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "def extract_uniq_emojis(text):\n",
+    "    return np.unique([chr for chr in text if chr in emoji_set])\n",
+    "\n",
+    "tweets_df['emojis'] = tweets_df.text.apply(extract_uniq_emojis)\n",
+    "\n",
+    "tweets_df.head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "834fe7185efd3dcb0e50a8e4634c19fd",
+     "grade": false,
+     "grade_id": "cell-ad74cb059e52296f",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "Now all the food/drink emojis in each Tweet are extracted and stored in a set, which we implement as a numpy array that has no duplicated items. The `numpy.unique` function is handy to remove duplicated items in a list.  We are now going to use the `mlxtend` for frequent itemset mining. This package requires that the itemsets be transformed into a matrix before being passed to its APIs, where each row represents an itemset and each column represents an item. Each cell encodes whether an item is in an itemset or not. You should know what this transformation does after doing the first assignment. Here we implement this transformation with the `MultiLabelBinarizer` in scikit-learn."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "8cb64d087c17d5b9eab235db1f5308ca",
+     "grade": false,
+     "grade_id": "cell-2775d2afe5e8af7a",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>☕</th>\n",
+       "      <th>🌭</th>\n",
+       "      <th>🌮</th>\n",
+       "      <th>🌯</th>\n",
+       "      <th>🌰</th>\n",
+       "      <th>🌶</th>\n",
+       "      <th>🌽</th>\n",
+       "      <th>🍄</th>\n",
+       "      <th>🍅</th>\n",
+       "      <th>🍆</th>\n",
+       "      <th>...</th>\n",
+       "      <th>🥭</th>\n",
+       "      <th>🥮</th>\n",
+       "      <th>🥯</th>\n",
+       "      <th>🦀</th>\n",
+       "      <th>🦐</th>\n",
+       "      <th>🦑</th>\n",
+       "      <th>🦞</th>\n",
+       "      <th>🧀</th>\n",
+       "      <th>🧁</th>\n",
+       "      <th>🧂</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>1</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>1</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>...</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>5 rows × 105 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   ☕  🌭  🌮  🌯  🌰  🌶  🌽  🍄  🍅  🍆  ...  🥭  🥮  🥯  🦀  🦐  🦑  🦞  🧀  🧁  🧂\n",
+       "0  0  0  0  1  0  0  0  0  0  0  ...  0  0  0  0  0  0  0  0  0  0\n",
+       "1  0  0  0  0  0  0  0  0  0  0  ...  0  0  0  0  0  0  0  0  0  0\n",
+       "2  0  0  0  0  0  0  0  0  0  0  ...  0  0  0  0  0  0  0  0  0  0\n",
+       "3  0  0  0  0  0  0  0  0  0  0  ...  0  0  0  0  0  0  0  0  0  0\n",
+       "4  1  0  0  0  0  0  0  0  0  0  ...  0  0  0  0  0  0  0  0  0  0\n",
+       "\n",
+       "[5 rows x 105 columns]"
+      ]
+     },
+     "execution_count": 7,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "mlb = MultiLabelBinarizer()\n",
+    "emoji_matrix = pd.DataFrame(data=mlb.fit_transform(tweets_df.emojis),\n",
+    "                            index=tweets_df.index,\n",
+    "                            columns=mlb.classes_)\n",
+    "emoji_matrix.head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "3b4cd43ad8a42e9380eccca50b56e8c6",
+     "grade": false,
+     "grade_id": "cell-2e719eb1ccf9a8ff",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "## 2. Summary Statistics\n",
+    "\n",
+    "Before we jump into analyzing a dataset, it is always wise to take a look at some summary statistics first. \n",
+    "\n",
+    "Let's examine how many emojis are used in a Tweet. The number of unique emojis used in a Tweet can be easily computed as the sum of each row of the emoji matrix. Let's call it `emoji_length` and plot its distribution."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "e94b9495c33adcd494f84d712e012513",
+     "grade": false,
+     "grade_id": "cell-6bb8b10e1b39f9b5",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0    4\n",
+       "1    6\n",
+       "2    2\n",
+       "3    2\n",
+       "4    2\n",
+       "dtype: int64"
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "emoji_length = emoji_matrix.sum(axis=1)\n",
+    "emoji_length.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "cd3231de3047908bf0448b997d9d79a7",
+     "grade": false,
+     "grade_id": "cell-33a1d0c902fbbe49",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>emoji_length</th>\n",
+       "      <th>freq</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>2</td>\n",
+       "      <td>7237</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>3</td>\n",
+       "      <td>1494</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>4</td>\n",
+       "      <td>559</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>5</td>\n",
+       "      <td>252</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>6</td>\n",
+       "      <td>123</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   emoji_length  freq\n",
+       "0             2  7237\n",
+       "1             3  1494\n",
+       "2             4   559\n",
+       "3             5   252\n",
+       "4             6   123"
+      ]
+     },
+     "execution_count": 9,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "emoji_length_distribution = emoji_length.value_counts()\\\n",
+    "    .rename_axis(index=\"emoji_length\").rename(\"freq\").reset_index()\n",
+    "emoji_length_distribution.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "db800e42052579b02d4df4c21809b582",
+     "grade": false,
+     "grade_id": "cell-3fc90826dc966cf1",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "Text(0, 0.5, 'frequency of tweets')"
+      ]
+     },
+     "execution_count": 10,
+     "metadata": {},
+     "output_type": "execute_result"
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "fig, ax = plt.subplots()\n",
+    "ax.plot(emoji_length_distribution.emoji_length, \n",
+    "        emoji_length_distribution.freq, \n",
+    "        \"o\")\n",
+    "ax.set_xlabel(\"#emojis in a tweet\")\n",
+    "ax.set_ylabel(\"frequency of tweets\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "143b5d396d36ec97a56bd2e0ed8f238a",
+     "grade": false,
+     "grade_id": "cell-7893051848843870",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "You should see a figure in which the x-axis represents the number of emojis used in a Tweet, and the y-axis represents the number of Tweets that contain that number of emojis. Clearly, we see that most Tweets use only a few (2 or 3) emojis (the dots in the top-left) while a few Tweets use a lot of emojis (the dots in the lower-right). To see the distribution clearly, let's change both the x- and y-axis to log scale."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "e37bcfaf2830d65ce93d642bc1cc56bf",
+     "grade": false,
+     "grade_id": "cell-1795b7e652a86f00",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "execution_count": 11,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "ax.set_xscale(\"log\")\n",
+    "ax.set_yscale(\"log\")\n",
+    "fig"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "2bc326331c4f7fa42e5fb91f9e7a555f",
+     "grade": false,
+     "grade_id": "cell-a9d065bdd2511c66",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "Surprisingly or not, the scatterplot shows a clear trend that is descending linearly. The trend resembles the [power law](https://en.wikipedia.org/wiki/Power_law) distribution, which is commonly observed in large real-world datasets.\n",
+    "\n",
+    "Next, let's examine the popularity of individual emojis, that is, the counts and the distribution of single items (emojis). The number of Tweets containing a given emoji can be calculated as the sum of the column in the emoji matrix corresponding to that emoji."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "2ffe3a06f6008d95c8cd968a7055a471",
+     "grade": false,
+     "grade_id": "cell-3e6bb28d6ca44c34",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "☕    585\n",
+       "🌭    193\n",
+       "🌮    186\n",
+       "🌯     85\n",
+       "🌰     53\n",
+       "dtype: int64"
+      ]
+     },
+     "execution_count": 12,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "emoji_popularity = emoji_matrix.sum(axis=0)\n",
+    "emoji_popularity.head()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "6c222531ee01b20b6845ca8011fb141a",
+     "grade": false,
+     "grade_id": "cell-189ac08c7e90f79a",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "### Exercise 1. Find the most popular emojis (5 pts)\n",
+    "Please compete the `top_n_emojis` function below, which should return a list of the $n$ most popular emojis based on the `emoji_popularity` DataFrame."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {
+    "deletable": false,
+    "nbgrader": {
+     "checksum": "22eeab0ed9809de7cfaba64b9a82f4e2",
+     "grade": false,
+     "grade_id": "cell-df6d9edb6221d3ac",
+     "locked": false,
+     "schema_version": 1,
+     "solution": true
+    }
+   },
+   "outputs": [],
+   "source": [
+    "def top_n_emojis(n):\n",
+    "    emoji_popularity.sort_values(ascending=False, inplace=True)\n",
+    "    return emoji_popularity.index[:n].tolist()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "1d11a389ea541b373cb358d4944f0b43",
+     "grade": true,
+     "grade_id": "cell-af48f86a662544c2",
+     "locked": true,
+     "points": 5,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "outputs": [],
+   "source": [
+    "assert top_n_emojis(2) == ['🍻', '🎂']\n",
+    "assert top_n_emojis(5) == ['🍻', '🎂', '🍔', '🍾', '🥂']"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "deletable": false,
+    "editable": false,
+    "nbgrader": {
+     "checksum": "099d141c29c5044308c6f663940d1e67",
+     "grade": false,
+     "grade_id": "cell-0ffb1ebf1d699b62",
+     "locked": true,
+     "schema_version": 1,
+     "solution": false
+    }
+   },
+   "source": [
+    "The most popular food/drink emojis turn out to be 🍻 and 🎂. Is it a surprise? Maybe they are popular because they mean beyond just beer and cake, but also \"cheers\" and \"happy birthday\"."
+   ]
+  }
+ ],
+ "metadata": {
+  "coursera": {
+   "schema_names": [
+    "mads_data_mining_i_v2_assignment2_part1"
+   ]
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
